@@ -1,0 +1,95 @@
+select *from Bioma
+select *from Estados
+select *from risco
+Select *from foco_calor
+select * from Area_Queimada
+
+create extension if not exists postgis;
+
+CREATE TABLE Estados (
+    id_estado INT PRIMARY KEY,
+    estado VARCHAR(100)
+);
+INSERT INTO Estados (id_estado, estado) VALUES
+(11, 'Rondônia'),
+(12, 'Acre'),
+(13, 'Amazonas'),
+(14, 'Roraima'),
+(15, 'Pará'),
+(16, 'Amapá'),
+(17, 'Tocantins'),
+(21, 'Maranhão'),
+(22, 'Piauí'),
+(23, 'Ceará'),
+(24, 'Rio Grande do Norte'),
+(25, 'Paraíba'),
+(26, 'Pernambuco'),
+(27, 'Alagoas'),
+(28, 'Sergipe'),
+(29, 'Bahia'),
+(31, 'Minas Gerais'),
+(32, 'Espírito Santo'),
+(33, 'Rio de Janeiro'),
+(35, 'São Paulo'),
+(41, 'Paraná'),
+(42, 'Santa Catarina'),
+(43, 'Rio Grande do Sul'),
+(50, 'Mato Grosso do Sul'),
+(51, 'Mato Grosso'),
+(52, 'Goiás'),
+(53, 'Distrito Federal');
+
+
+CREATE TABLE Bioma (
+    id INTEGER PRIMARY KEY,
+    bioma VARCHAR(100)
+);
+INSERT INTO Bioma (id, bioma) VALUES
+(1, 'Amazônia'),
+(2, 'Caatinga'),
+(3, 'Cerrado'),
+(4, 'Mata Atlântica'),
+(5, 'Pampa'),
+(6, 'Pantanal');
+
+
+-- 1. Criação da sequência para o campo 'id'
+CREATE SEQUENCE IF NOT EXISTS risco_id_seq;
+
+-- 2. Criação da tabela 'Risco' com todos os tipos e restrições corretos
+CREATE TABLE IF NOT EXISTS Risco (
+    id INTEGER PRIMARY KEY DEFAULT nextval('risco_id_seq'), -- ID autoincremental
+    data DATE,                                              -- Data do registro
+    geometria GEOMETRY(POINT, 4326),                        -- Geometria com SRID 4326
+    estado_id INTEGER,                                      -- Referência ao estado
+    bioma_id INTEGER,                                       -- Referência ao bioma
+    risco_fogo NUMERIC(10,2),                               -- Risco com até 2 casas decimais
+    FOREIGN KEY (estado_id) REFERENCES Estados(id_estado),  -- FK para Estados
+    FOREIGN KEY (bioma_id) REFERENCES Bioma(id)             -- FK para Bioma
+);
+
+ CREATE TABLE Foco_calor(
+    id SERIAL PRIMARY KEY,
+    data TIMESTAMP,
+    geometria GEOMETRY(POINT, 4326),
+    estado_id INTEGER,
+    bioma_id INTEGER,
+    risco_fogo DECIMAL(3, 2),
+    dia_sem_chuva INTEGER,
+    precipitacao DECIMAL(5, 2),
+    frp DECIMAL(5, 1),
+    FOREIGN KEY (estado_id) REFERENCES Estados(id_estado),
+    FOREIGN KEY (bioma_id) REFERENCES Bioma(id)
+);
+
+CREATE TABLE Area_Queimada (
+    id SERIAL PRIMARY KEY,                         -- ID autoincrementável
+    estado_id INT REFERENCES Estados(id_estado),   -- FK para o estado (tabela Estados)
+    bioma_id INT REFERENCES Bioma(id),             -- FK para o bioma (tabela Bioma)
+   data_pas DATE NOT NULL,                         -- Data do foco
+    risco DECIMAL(5,2),                            -- Índice de risco (0.00 a 1.00)
+    frp DECIMAL(7,2),                              -- Potência radiativa do fogo (0.1 a 5000)
+    geom GEOMETRY(Point, 4326),                    -- Coordenadas do foco (WGS 84)
+    FOREIGN KEY (estado_id) REFERENCES Estados(id_estado),
+    FOREIGN KEY (bioma_id) REFERENCES Bioma(id)
+	);

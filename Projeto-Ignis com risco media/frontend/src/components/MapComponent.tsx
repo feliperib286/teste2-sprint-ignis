@@ -1,7 +1,8 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import MarkerClusterGroup from 'react-leaflet-markercluster';
 
 interface BaseDado {
   latitude: number;
@@ -11,6 +12,9 @@ interface BaseDado {
   risco_fogo: number;
   data: string;
   tipo: string;
+  dia_sem_chuva?: string;
+  precipitacao?: number;
+  frp?: number;
 }
 
 interface Props {
@@ -26,77 +30,62 @@ const getColor = (valor: number): string => {
   return '#FFEDA0';
 };
 
-const brasilBounds: L.LatLngBoundsExpression = [
-  [-34.0, -74.0],
-  [5.3, -32.4],
-];
-
 const MapComponent: React.FC<Props> = ({ dados }) => {
-  const [modoAgrupamento, setModoAgrupamento] = useState<'estado' | 'bioma'>('estado');
+  if (!dados.length) return <p style={{ padding: '1rem' }}>Nenhum dado encontrado.</p>;
 
-  useEffect(() => {
-    console.log("🧪 Dados recebidos no MapComponent:", dados);
-    const dadosRisco = dados.filter(d => d.tipo === 'risco' && typeof d.risco_fogo === 'number' && d.risco_fogo >= 0);
-    console.log("✅ Dados válidos (tipo 'risco' e risco_fogo >= 0):", dadosRisco);
-  }, [dados]);
+  const tipoAtual = dados[0].tipo;
 
-  const normalizar = (str: string) => str.trim().toLowerCase();
+  if (tipoAtual === 'risco') {
+    const grupos = useMemo(() => {
+      const agrupado: {
+        [chave: string]: {
+          total: number;
+          lat: number;
+          lng: number;
+          count: number;
+          exemplo: BaseDado;
+        };
+      } = {};
 
-  const dadosAgrupados = useMemo(() => {
-    const grupos: {
-      [chave: string]: {
-        totalRisco: number;
-        totalLat: number;
-        totalLng: number;
-        count: number;
-        exemplo: BaseDado;
-      };
-    } = {};
-
-    dados
-      .filter(d => d.tipo === 'risco' && typeof d.risco_fogo === 'number' && d.risco_fogo >= 0)
-      .forEach(d => {
-        const chave = normalizar(modoAgrupamento === 'estado' ? d.estado : d.bioma);
-        if (!grupos[chave]) {
-          grupos[chave] = {
-            totalRisco: 0,
-            totalLat: 0,
-            totalLng: 0,
+      dados.forEach(d => {
+        const chave = d.estado;
+        if (!agrupado[chave]) {
+          agrupado[chave] = {
+            total: 0,
+            lat: 0,
+            lng: 0,
             count: 0,
-            exemplo: d,
+            exemplo: d
           };
         }
-        grupos[chave].totalRisco += d.risco_fogo;
-        grupos[chave].totalLat += d.latitude;
-        grupos[chave].totalLng += d.longitude;
-        grupos[chave].count += 1;
+        agrupado[chave].total += d.risco_fogo;
+        agrupado[chave].lat += d.latitude;
+        agrupado[chave].lng += d.longitude;
+        agrupado[chave].count++;
       });
 
-    return Object.entries(grupos).map(([chave, grupo]) => ({
-      chave,
-      media: grupo.totalRisco / grupo.count,
-      latitude: grupo.totalLat / grupo.count,
-      longitude: grupo.totalLng / grupo.count,
-      exemplo: grupo.exemplo,
-    }));
-  }, [dados, modoAgrupamento]);
+      return Object.values(agrupado).map(g => ({
+        media: g.total / g.count,
+        lat: g.lat / g.count,
+        lng: g.lng / g.count,
+        exemplo: g.exemplo
+      }));
+    }, [dados]);
 
-  const marcadoresMedia = useMemo(
-    () =>
-      dadosAgrupados.map(({ chave, media, latitude, longitude, exemplo }, idx) => {
-        const tamanho = 40; // tamanho fixo para todos
-
-        return (
+    return (
+      <MapContainer center={[-15.78, -47.92]} zoom={4} style={{ height: '100vh', width: '100vw' }}>
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        {grupos.map((g, i) => (
           <Marker
-            key={idx}
-            position={[latitude, longitude]}
+            key={i}
+            position={[g.lat, g.lng]}
             icon={L.divIcon({
               className: 'custom-icon',
               html: `
                 <div style="
-                  background-color: ${getColor(media)};
-                  width: ${tamanho}px;
-                  height: ${tamanho}px;
+                  background-color: ${getColor(g.media)};
+                  width: 40px;
+                  height: 40px;
                   border-radius: 50%;
                   display: flex;
                   align-items: center;
@@ -107,86 +96,111 @@ const MapComponent: React.FC<Props> = ({ dados }) => {
                   border: 1px solid black;
                   box-shadow: 0 0 4px rgba(0,0,0,0.3);
                 ">
-                  ${media.toFixed(3)}
-                </div>`,
+                  ${g.media.toFixed(3)}
+                </div>`
             })}
           >
             <Popup>
-              <strong>{modoAgrupamento === 'estado' ? 'Estado' : 'Bioma'}:</strong> {exemplo[modoAgrupamento]}<br />
-              <strong>Média do risco de fogo:</strong> {media.toFixed(3)}
+              <div style={{ color: 'black' }}>
+                <strong>Estado:</strong> {g.exemplo.estado}<br />
+                <strong>Média do risco de fogo:</strong> {g.media.toFixed(3)}
+              </div>
             </Popup>
           </Marker>
-        );
-      }),
-    [dadosAgrupados, modoAgrupamento]
-  );
+        ))}
+      </MapContainer>
+    );
+  }
 
   return (
-    <>
-      {/* Filtro de agrupamento */}
-      <div style={{ padding: '1rem' }}>
-        <label>Agrupar por:</label>
-        <select
-          value={modoAgrupamento}
-          onChange={e => setModoAgrupamento(e.target.value as 'estado' | 'bioma')}
-          style={{ marginLeft: '0.5rem' }}
-        >
-          <option value="estado">Estado</option>
-          <option value="bioma">Bioma</option>
-        </select>
-      </div>
+    <MapContainer center={[-15.78, -47.92]} zoom={4} style={{ height: '100vh', width: '100vw' }}>
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <MarkerClusterGroup
+        showCoverageOnHover={false}
+        spiderfyOnMaxZoom={true}
+        removeOutsideVisibleBounds={true}
+        iconCreateFunction={(cluster) => {
+          const count = cluster.getChildCount();
+          let size = 40;
+          let color = '#FEB24C';
 
-      {/* Mapa */}
-      <MapContainer
-        center={[-15.78, -47.92]}
-        zoom={4}
-        style={{ height: '100vh', width: '100vw', zIndex: 0 }}
-        maxBounds={brasilBounds}
-        maxBoundsViscosity={1.0}
+          if (count >= 500) {
+            size = 60;
+            color = '#800026';
+          } else if (count >= 200) {
+            size = 50;
+            color = '#BD0026';
+          } else if (count >= 100) {
+            size = 45;
+            color = '#FC4E2A';
+          } else if (count >= 50) {
+            size = 40;
+            color = '#FD8D3C';
+          }
+
+          return L.divIcon({
+            html: `
+              <div style="
+                background-color: ${color};
+                width: ${size}px;
+                height: ${size}px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid white;
+                box-shadow: 0 0 5px rgba(0,0,0,0.5);
+              ">
+                ${count}
+              </div>
+            `,
+            className: 'marker-cluster-custom',
+            iconSize: L.point(size, size, true)
+          });
+        }}
       >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; OpenStreetMap contributors'
-        />
-        {marcadoresMedia}
-      </MapContainer>
-
-      <Legenda />
-    </>
+        {dados.map((item, idx) => (
+          <Marker
+            key={idx}
+            position={[item.latitude, item.longitude]}
+            icon={L.divIcon({
+              className: 'custom-fire-icon',
+              html: `
+                <div style="
+                  background-color: #e25822;
+                  color: white;
+                  font-size: 18px;
+                  width: 28px;
+                  height: 28px;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  box-shadow: 0 0 3px rgba(0,0,0,0.3);
+                ">🔥</div>
+              `,
+              iconSize: L.point(28, 28, true)
+            })}
+          >
+            <Popup>
+              <div style={{ color: 'black' }}>
+                <strong>Data:</strong> {new Date(item.data).toLocaleDateString()}<br />
+                <strong>Estado:</strong> {item.estado}<br />
+                <strong>Bioma:</strong> {item.bioma}<br />
+                {item.risco_fogo !== undefined && <><strong>Risco:</strong> {item.risco_fogo}<br /></>}
+                {item.frp !== undefined && <><strong>FRP:</strong> {item.frp}<br /></>}
+                {item.dia_sem_chuva && <><strong>Dias sem chuva:</strong> {item.dia_sem_chuva}<br /></>}
+                {item.precipitacao !== undefined && <><strong>Precipitação:</strong> {item.precipitacao}<br /></>}
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MarkerClusterGroup>
+    </MapContainer>
   );
 };
 
 export default MapComponent;
-
-// Legenda no canto do mapa
-const Legenda = () => (
-  <div style={{
-    position: 'absolute',
-    bottom: '20px',
-    right: '20px',
-    background: 'black',
-    color: 'white',
-    padding: '10px',
-    borderRadius: '8px',
-    boxShadow: '0 0 5px rgba(0,0,0,0.3)',
-    fontSize: '12px',
-    zIndex: 1000
-  }}>
-    <strong>Risco de Fogo</strong>
-    <div><span style={bolinha('#800026')}></span> ≥ 0.9 (Muito Alto)</div>
-    <div><span style={bolinha('#BD0026')}></span> ≥ 0.7 (Alto)</div>
-    <div><span style={bolinha('#FC4E2A')}></span> ≥ 0.5 (Moderado)</div>
-    <div><span style={bolinha('#FD8D3C')}></span> ≥ 0.3 (Baixo)</div>
-    <div><span style={bolinha('#FEB24C')}></span> ≥ 0.1 (Muito Baixo)</div>
-  </div>
-);
-
-const bolinha = (cor: string) => ({
-  display: 'inline-block',
-  width: 12,
-  height: 12,
-  marginRight: 6,
-  borderRadius: '50%',
-  backgroundColor: cor,
-  border: '1px solid white'
-});

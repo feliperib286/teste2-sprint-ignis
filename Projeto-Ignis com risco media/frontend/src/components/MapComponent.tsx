@@ -122,20 +122,20 @@ const MapComponent: React.FC<Props> = ({ dados }) => {
         iconCreateFunction={(cluster) => {
           const count = cluster.getChildCount();
           let size = 40;
-          let color = '#FEB24C';
+          let color = '#eb7005';
 
           if (count >= 500) {
             size = 60;
-            color = '#800026';
+            color = '#eb7005';
           } else if (count >= 200) {
             size = 50;
-            color = '#BD0026';
+            color = '#eb7005';
           } else if (count >= 100) {
             size = 45;
-            color = '#FC4E2A';
+            color = '#eb7005';
           } else if (count >= 50) {
             size = 40;
-            color = '#FD8D3C';
+            color = '#eb7005';
           }
 
           return L.divIcon({
@@ -148,7 +148,7 @@ const MapComponent: React.FC<Props> = ({ dados }) => {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                color: white;
+                color: black;
                 font-weight: bold;
                 font-size: 14px;
                 border: 2px solid white;
@@ -170,7 +170,7 @@ const MapComponent: React.FC<Props> = ({ dados }) => {
               className: 'custom-fire-icon',
               html: `
                 <div style="
-                  background-color: #e25822;
+                  background-color:rgb(226, 34, 34);
                   color: white;
                   font-size: 18px;
                   width: 28px;
